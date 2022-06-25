@@ -1,3 +1,5 @@
+// -*- compile-command: "go test -v ./..."; -*-
+
 /*
 Copyright © 2022 Glenn M. Lewis
 

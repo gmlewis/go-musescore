@@ -1,3 +1,5 @@
+// -*- compile-command: "go test -v ./..."; -*-
+
 /*
 Copyright © 2022 Glenn M. Lewis
 
@@ -21,6 +23,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"fmt"
+	_ "image/png"
 	"io"
 	"log"
 	"os"
@@ -58,6 +61,7 @@ func parseZip(buf []byte) (*Score, error) {
 
 	var result *Score
 	for _, fh := range r.File {
+		log.Printf("fh.Name=%v", fh.Name)
 		if fh.FileInfo().IsDir() {
 			log.Printf("found dir: %v", fh.Name)
 			continue
