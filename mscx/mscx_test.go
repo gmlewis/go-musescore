@@ -50,35 +50,42 @@ func TestNew(t *testing.T) {
 	tests := []struct {
 		name string
 		in   []byte
-		want *Score
+		want *ScoreZip
 	}{
 		{
 			name: "test01",
 			in:   test01,
+			want: test01Data,
 		},
 		{
 			name: "test02",
 			in:   test02,
+			want: test02Data,
 		},
 		{
 			name: "test03",
 			in:   test03,
+			want: test03Data,
 		},
 		{
 			name: "test04",
 			in:   test04,
+			want: test04Data,
 		},
 		{
 			name: "test05",
 			in:   test05,
+			want: test05Data,
 		},
 		{
 			name: "test06",
 			in:   test06,
+			want: test06Data,
 		},
 		{
 			name: "test07",
 			in:   test07,
+			want: test07Data,
 		},
 	}
 

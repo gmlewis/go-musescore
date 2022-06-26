@@ -22,6 +22,7 @@ package mscx
 import (
 	"archive/zip"
 	"bytes"
+	"encoding/xml"
 	"fmt"
 	_ "image/png"
 	"io"
@@ -31,7 +32,7 @@ import (
 )
 
 // NewFromFile reads a `*.mscx` or `*.mscz` file and returns the resulting parsed score.
-func NewFromFile(filename string) (*Score, error) {
+func NewFromFile(filename string) (*ScoreZip, error) {
 	b, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
@@ -40,7 +41,7 @@ func NewFromFile(filename string) (*Score, error) {
 }
 
 // New reads `mscx` or `mscz` data and returns the resulting parsed score.
-func New(buf []byte) (*Score, error) {
+func New(buf []byte) (*ScoreZip, error) {
 	if len(buf) > len(xmlStart) && string(buf[0:len(xmlStart)]) == xmlStart {
 		return parseXML(buf)
 	}
@@ -49,17 +50,21 @@ func New(buf []byte) (*Score, error) {
 
 const xmlStart = "<?xml "
 
-func parseXML(buf []byte) (*Score, error) {
-	return nil, nil
+func parseXML(buf []byte) (*ScoreZip, error) {
+	var s *MuseScore
+	if err := xml.Unmarshal(buf, &s); err != nil {
+		return nil, err
+	}
+	return &ScoreZip{MuseScore: s}, nil
 }
 
-func parseZip(buf []byte) (*Score, error) {
+func parseZip(buf []byte) (*ScoreZip, error) {
 	r, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
 	if err != nil {
 		return nil, fmt.Errorf("zip.NewReader: %w", err)
 	}
 
-	var result *Score
+	var result *ScoreZip
 	for _, fh := range r.File {
 		log.Printf("fh.Name=%v", fh.Name)
 		if fh.FileInfo().IsDir() {
