@@ -33,27 +33,6 @@ var (
 		"></bracket>",
 		"></program>",
 	}
-	xmlMoreIndent = []string{
-		"  </Articulation>",
-		"  </Channel>",
-		"  </Chord>",
-		"  </Instrument>",
-		"  </KeySig>",
-		"  </location>",
-		"  </Lyrics>",
-		"  </Measure>",
-		"  </next>",
-		"  </Note>",
-		"  </Part>",
-		"  </Spanner>",
-		"  </Staff>",
-		"  </StaffType>",
-		"  </Style>",
-		"  </Text>",
-		"  </TimeSig>",
-		"  </VBox>",
-		"  </voice>",
-	}
 )
 
 // XML renders the embedded MuseScore to XML format.
@@ -63,16 +42,13 @@ func (s *ScoreZip) XML() ([]byte, error) {
 		return nil, err
 	}
 
-	result := append([]byte(`<?xml version="1.0" encoding="UTF-8"?>`+"\n<m"), b[2:]...)
+	result := append([]byte(xml.Header+"<m"), b[2:]...)
 	for _, ending := range xmlEndingsToShorten {
 		result = bytes.ReplaceAll(result, []byte(ending), []byte("/>"))
 	}
 	result = bytes.ReplaceAll(result, []byte("&#xA;"), []byte("\n"))
 	result = bytes.ReplaceAll(result, []byte("&#39;"), []byte("'"))
-	for _, indent := range xmlMoreIndent {
-		result = bytes.ReplaceAll(result, []byte(indent), []byte("  "+indent))
-	}
-	// result = bytes.ReplaceAll(result, []byte("  </"), []byte("    </"))
+	result = bytes.ReplaceAll(result, []byte("  </"), []byte("    </"))
 	return result, nil
 }
 
@@ -205,21 +181,23 @@ type Program struct {
 }
 
 type Voice struct {
-	KeySig  *KeySig  `xml:"KeySig,omitempty"`
-	TimeSig *TimeSig `xml:"TimeSig,omitempty"`
-	// 	Dynamic *Dynamic `xml:"Dynamic,omitempty"`
-	// 	Tempo *Tempo   `xml:"Tempo,omitempty"`
-	Chord []*Chord `xml:"Chord"`
-	// Tuplet    *TupletClass `xml:"Tuplet,omitempty"`
-	EndTuplet *string  `xml:"endTuplet,omitempty"`
-	BarLine   *BarLine `xml:"BarLine,omitempty"`
-	//	Spanner   *VoiceSpanner `xml:"Spanner"`
-	Rest    *Rest    `xml:"Rest"`
-	Fermata *BarLine `xml:"Fermata,omitempty"`
-	// 	StaffText *StaffText `xml:"StaffText,omitempty"`
+	// KeySig   *KeySig  `xml:"KeySig,omitempty"`
+	// TimeSig  *TimeSig `xml:"TimeSig,omitempty"`
+	Children []byte `xml:",innerxml"`
+	// 	// 	Dynamic *Dynamic `xml:"Dynamic,omitempty"`
+	// 	// 	Tempo *Tempo   `xml:"Tempo,omitempty"`
+	// 	Chord []*Chord `xml:"Chord"`
+	// 	// Tuplet    *TupletClass `xml:"Tuplet,omitempty"`
+	// 	EndTuplet *string  `xml:"endTuplet,omitempty"`
+	// 	BarLine   *BarLine `xml:"BarLine,omitempty"`
+	// 	//	Spanner   *VoiceSpanner `xml:"Spanner"`
+	// 	Rest    *Rest    `xml:"Rest"`
+	// 	Fermata *BarLine `xml:"Fermata,omitempty"`
+	// 	// 	StaffText *StaffText `xml:"StaffText,omitempty"`
 }
 
 type Rest struct {
+	DurationType string `xml:"durationType"`
 }
 
 type BarLine struct {
@@ -445,16 +423,17 @@ type Lyrics struct {
 }
 
 type Spanner struct {
-	Type string `xml:"type,attr"`
-	Slur *Slur  `xml:"Slur"`
-	Next *Next  `xml:"next"`
+	Type string    `xml:"type,attr"`
+	Slur *Slur     `xml:"Slur"`
+	Next *NextPrev `xml:"next"`
+	Prev *NextPrev `xml:"prev"`
 }
 
 type Slur struct {
-	Text string `xml:",chardata"`
+	Up string `xml:"up,omitempty"`
 }
 
-type Next struct {
+type NextPrev struct {
 	Location *Location `xml:"location"`
 }
 
