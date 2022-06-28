@@ -31,21 +31,25 @@ import (
 	"strings"
 )
 
+// CallbackFn is an optional function that will be called with each file entry
+// found in the ZIP.
+type CallbackFn func(filename string, content []byte)
+
 // NewFromFile reads a `*.mscx` or `*.mscz` file and returns the resulting parsed score.
-func NewFromFile(filename string) (*ScoreZip, error) {
+func NewFromFile(filename string, callback CallbackFn) (*ScoreZip, error) {
 	b, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	return New(b)
+	return New(b, callback)
 }
 
 // New reads `mscx` or `mscz` data and returns the resulting parsed score.
-func New(buf []byte) (*ScoreZip, error) {
+func New(buf []byte, callback CallbackFn) (*ScoreZip, error) {
 	if len(buf) > len(xmlStart) && string(buf[0:len(xmlStart)]) == xmlStart {
 		return parseXML(buf)
 	}
-	return parseZip(buf)
+	return parseZip(buf, callback)
 }
 
 const xmlStart = "<?xml "
@@ -58,7 +62,7 @@ func parseXML(buf []byte) (*ScoreZip, error) {
 	return &ScoreZip{MuseScore: s}, nil
 }
 
-func parseZip(buf []byte) (*ScoreZip, error) {
+func parseZip(buf []byte, callback CallbackFn) (*ScoreZip, error) {
 	r, err := zip.NewReader(bytes.NewReader(buf), int64(len(buf)))
 	if err != nil {
 		return nil, fmt.Errorf("zip.NewReader: %w", err)
@@ -80,6 +84,10 @@ func parseZip(buf []byte) (*ScoreZip, error) {
 		nb, err := io.ReadAll(rc)
 		if err != nil {
 			return nil, fmt.Errorf("zip.io.ReadAll(%q): %w", fh.Name, err)
+		}
+
+		if callback != nil {
+			callback(fh.Name, nb)
 		}
 
 		if strings.HasSuffix(fh.Name, ".mscx") {

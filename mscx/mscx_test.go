@@ -20,6 +20,7 @@ package mscx
 
 import (
 	_ "embed"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -91,13 +92,30 @@ func TestNew(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := New(test01)
+			var xml []byte
+			cb := func(fn string, buf []byte) {
+				if strings.HasSuffix(fn, ".mscx") {
+					xml = buf
+				}
+			}
+
+			got, err := New(test01, cb)
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("New(%q) differs (-want +got):\n%s", tt.name, diff)
+			}
+
+			gotXML, err := got.XML()
+			if err != nil {
+				t.Fatalf("got.XML: %v", err)
+			}
+
+			if diff := cmp.Diff(string(xml), string(gotXML)); diff != "" {
+				t.Logf(string(gotXML))
+				t.Fatalf("New(%q) XML differs (-want +got):\n%s", tt.name, diff)
 			}
 		})
 	}
