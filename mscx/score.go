@@ -401,19 +401,33 @@ type Measure struct {
 
 // Instrument represents the XML data of the same name.
 type Instrument struct {
-	LongName           string                 `xml:"longName"`
-	ShortName          string                 `xml:"shortName"`
-	TrackName          string                 `xml:"trackName"`
-	MinPitchP          string                 `xml:"minPitchP,omitempty"`
-	MaxPitchP          string                 `xml:"maxPitchP,omitempty"`
-	MinPitchA          string                 `xml:"minPitchA,omitempty"`
-	MaxPitchA          string                 `xml:"maxPitchA,omitempty"`
-	TransposeDiatonic  string                 `xml:"transposeDiatonic,omitempty"`
-	TransposeChromatic string                 `xml:"transposeChromatic,omitempty"`
-	InstrumentID       string                 `xml:"instrumentId"`
-	Clef               *Clef                  `xml:"clef"`
-	Articulation       []*ArticulationElement `xml:"Articulation"`
-	Channel            Channel                `xml:"Channel"`
+	LongName           string `xml:"longName"`
+	ShortName          string `xml:"shortName"`
+	TrackName          string `xml:"trackName"`
+	MinPitchP          string `xml:"minPitchP,omitempty"`
+	MaxPitchP          string `xml:"maxPitchP,omitempty"`
+	MinPitchA          string `xml:"minPitchA,omitempty"`
+	MaxPitchA          string `xml:"maxPitchA,omitempty"`
+	TransposeDiatonic  string `xml:"transposeDiatonic,omitempty"`
+	TransposeChromatic string `xml:"transposeChromatic,omitempty"`
+	InstrumentID       string `xml:"instrumentId"`
+
+	UseDrumset int     `xml:"useDrumset,omitempty"`
+	Drum       []*Drum `xml:"Drum"`
+
+	Clef         *Clef                  `xml:"clef"`
+	Articulation []*ArticulationElement `xml:"Articulation"`
+	Channel      []*Channel             `xml:"Channel"`
+}
+
+type Drum struct {
+	Pitch    int    `xml:"pitch,attr"`
+	Head     int    `xml:"head"`
+	Line     int    `xml:"line"`
+	Voice    int    `xml:"voice"`
+	Name     string `xml:"name"`
+	Stem     int    `xml:"stem"`
+	Shortcut string `xml:"shortcut,omitempty"`
 }
 
 // Clef represents the XML data of the same name.
@@ -431,8 +445,8 @@ type ArticulationElement struct {
 
 // Channel represents the XML data of the same name.
 type Channel struct {
-	Program    Program       `xml:"program"`
 	Controller []*Controller `xml:"controller"`
+	Program    Program       `xml:"program"`
 	Synti      string        `xml:"synti"`
 }
 

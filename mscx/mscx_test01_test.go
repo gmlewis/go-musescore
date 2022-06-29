@@ -92,7 +92,7 @@ var test01Data = &ScoreZip{
 							{Velocity: "120", GateTime: "50", Name: "marcatoStaccato"},
 							{Velocity: "120", GateTime: "100", Name: "marcatoTenuto"},
 						},
-						Channel: Channel{Program: Program{Value: "0"}, Synti: "Fluid"},
+						Channel: []*Channel{{Program: Program{Value: "0"}, Synti: "Fluid"}},
 					},
 				},
 			},
