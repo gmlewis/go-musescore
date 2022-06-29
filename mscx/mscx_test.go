@@ -61,32 +61,26 @@ func TestNew(t *testing.T) {
 		{
 			name: "test02",
 			in:   test02,
-			want: test02Data,
 		},
 		{
 			name: "test03",
 			in:   test03,
-			want: test03Data,
 		},
 		{
 			name: "test04",
 			in:   test04,
-			want: test04Data,
 		},
 		{
 			name: "test05",
 			in:   test05,
-			want: test05Data,
 		},
 		{
 			name: "test06",
 			in:   test06,
-			want: test06Data,
 		},
 		{
 			name: "test07",
 			in:   test07,
-			want: test07Data,
 		},
 	}
 
@@ -105,21 +99,23 @@ func TestNew(t *testing.T) {
 			strippedXML := strip(string(xml))
 
 			// Compare Go structs to Go structs
-			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("New(%q) Go structs to Go struct differs (-want +got):\n%s", tt.name, diff)
-			}
+			if tt.want != nil {
+				if diff := cmp.Diff(tt.want, got); diff != "" {
+					t.Errorf("New(%q) Go structs to Go struct differs (-want +got):\n%s", tt.name, diff)
+				}
 
-			// Compare XML in to Go "tt.want" structs (as XML)
-			wantXML, err := tt.want.XML()
-			if err != nil {
-				t.Fatalf("tt.want.XML: %v", err)
-			}
+				// Compare XML in to Go "tt.want" structs (as XML)
+				wantXML, err := tt.want.XML()
+				if err != nil {
+					t.Fatalf("tt.want.XML: %v", err)
+				}
 
-			strippedWant := strip(string(wantXML))
-			if diff := cmp.Diff(strippedXML, strippedWant); diff != "" {
-				t.Log("strippedXML:\n", string(strippedXML))
-				t.Log("wantXML:\n", string(wantXML))
-				t.Errorf("New(%q) tt.want XML differs (-want('orig') +got('tt.want')):\n%s", tt.name, diff)
+				strippedWant := strip(string(wantXML))
+				if diff := cmp.Diff(strippedXML, strippedWant); diff != "" {
+					t.Log("strippedXML:\n", string(strippedXML))
+					t.Log("wantXML:\n", string(wantXML))
+					t.Errorf("New(%q) tt.want XML differs (-want('orig') +got('tt.want')):\n%s", tt.name, diff)
+				}
 			}
 
 			// Compare XML in to XML out

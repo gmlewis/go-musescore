@@ -523,7 +523,7 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
-											DurationType: "half",
+											DurationType: "quarter",
 											Lyrics: []*Lyrics{
 												{Syllabic: "begin", Text: "tri"},
 												{No: 1, Syllabic: "middle", Text: "hon"},
@@ -538,7 +538,7 @@ var test01Data = &ScoreZip{
 											},
 										},
 										&Chord{
-											DurationType: "half",
+											DurationType: "quarter",
 											Lyrics: []*Lyrics{
 												{Syllabic: "end", Text: "umphs", TicksF: "0/4"},
 												{No: 1, Syllabic: "end", Text: "ors", TicksF: "0/4"},
@@ -603,8 +603,8 @@ var test01Data = &ScoreZip{
 											Note: []*Note{{Pitch: 61, TPC: 21},
 												{Pitch: 69, TPC: 17}},
 										},
+										&Rest{DurationType: "half"},
 										&BarLine{Subtype: "double"},
-										&Rest{},
 									},
 								},
 							},
@@ -614,6 +614,7 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											Dots:         1,
 											DurationType: "whole",
 											Lyrics:       []*Lyrics{{No: 5, Syllabic: "begin", Text: "A"}},
 											Note: []*Note{{Pitch: 62, TPC: 16},
@@ -628,6 +629,7 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											Dots:         1,
 											DurationType: "whole",
 											Lyrics:       []*Lyrics{{No: 5, Syllabic: "end", Text: "men."}},
 											Note: []*Note{{Pitch: 61, TPC: 21},
@@ -665,14 +667,29 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
-											DurationType: "half",
+											DurationType: "quarter",
 											Note: []*Note{
 												{Pitch: 49, TPC: 21},
 												{Pitch: 52, TPC: 18},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
 												{Pitch: 45, TPC: 17},
 												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 56, TPC: 22},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 56, TPC: 22},
 											},
@@ -686,48 +703,83 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
-											DurationType: "half",
+											DurationType: "quarter",
 											Note: []*Note{
 												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 56, TPC: 22},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 54, TPC: 20},
 												{Pitch: 57, TPC: 17},
-												{Pitch: 52, TPC: 18},
-												{Pitch: 56, TPC: 22},
 											},
 										},
-									},
-								},
-							},
-						},
-						{
-							Voice: []*Voice{
-								{
-									TimedElements: []any{
-										&Chord{
-											DurationType: "half",
-											Note: []*Note{
-												{Pitch: 57, TPC: 17},
-												{Pitch: 57, TPC: 17},
-												{Pitch: 56, TPC: 22},
-												{Pitch: 59, TPC: 19},
-												{Pitch: 57, TPC: 17},
-											},
-										},
-									},
-								},
-							},
-						},
-						{
-							Voice: []*Voice{
-								{
-									TimedElements: []any{
 										&Chord{
 											DurationType: "half",
 											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 56, TPC: 22},
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Voice: []*Voice{
+								{
+									TimedElements: []any{
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
+												{Pitch: 56, TPC: 22},
+												{Pitch: 59, TPC: 19},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
+												{Pitch: 57, TPC: 17},
+											},
+										},
+									},
+								},
+							},
+						},
+						{
+							Voice: []*Voice{
+								{
+									TimedElements: []any{
+										&Chord{
+											DurationType: "whole",
+											Note: []*Note{
+												{Pitch: 52, TPC: 18},
+												{Pitch: 56, TPC: 22},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 59, TPC: 19},
 											},
@@ -741,12 +793,27 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
-											DurationType: "half",
+											DurationType: "quarter",
 											Note: []*Note{
 												{Pitch: 57, TPC: 17},
 												{Pitch: 61, TPC: 21},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
 												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 49, TPC: 21},
 												{Pitch: 57, TPC: 17},
 											},
@@ -760,14 +827,29 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 50, TPC: 16},
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 50, TPC: 16},
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
 											DurationType: "half",
 											Note: []*Note{
 												{Pitch: 50, TPC: 16},
 												{Pitch: 57, TPC: 17},
-												{Pitch: 50, TPC: 16},
-												{Pitch: 57, TPC: 17},
-												{Pitch: 50, TPC: 16},
-												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 50, TPC: 16},
 												{Pitch: 57, TPC: 17},
 											},
@@ -781,14 +863,29 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 52, TPC: 18},
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "quarter",
+											Note: []*Note{
+												{Pitch: 52, TPC: 18},
+												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
 											DurationType: "half",
 											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 57, TPC: 17},
-												{Pitch: 52, TPC: 18},
-												{Pitch: 57, TPC: 17},
-												{Pitch: 52, TPC: 18},
-												{Pitch: 57, TPC: 17},
+											},
+										},
+										&Chord{
+											DurationType: "half",
+											Note: []*Note{
 												{Pitch: 52, TPC: 18},
 												{Pitch: 56, TPC: 22},
 											},
@@ -806,8 +903,8 @@ var test01Data = &ScoreZip{
 											Note: []*Note{{Pitch: 45, TPC: 17},
 												{Pitch: 57, TPC: 17}},
 										},
+										&Rest{DurationType: "half"},
 										&BarLine{Subtype: "double"},
-										&Rest{},
 									},
 								},
 							},
@@ -817,6 +914,7 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											Dots:         1,
 											DurationType: "whole",
 											Note: []*Note{{Pitch: 50, TPC: 16},
 												{Pitch: 54, TPC: 20}},
@@ -830,6 +928,7 @@ var test01Data = &ScoreZip{
 								{
 									TimedElements: []any{
 										&Chord{
+											Dots:         1,
 											DurationType: "whole",
 											Note: []*Note{{Pitch: 45, TPC: 17},
 												{Pitch: 52, TPC: 18}},
