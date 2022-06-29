@@ -129,7 +129,7 @@ type Part struct {
 	Instrument *Instrument  `xml:"Instrument"`
 }
 
-// Staff represents the XML data of the same name.
+// PartStaff represents the XML data of the same name.
 type PartStaff struct {
 	ID            string    `xml:"id,attr"`
 	StaffType     StaffType `xml:"StaffType"`
@@ -380,6 +380,7 @@ func (b *Bracket) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error
 type StaffType struct {
 	Group  string `xml:"group,attr"`
 	Name   string `xml:"name"`
+	Lines  int    `xml:"lines,omitempty"`
 	KeySig *int   `xml:"keysig,omitempty"`
 }
 
@@ -445,9 +446,90 @@ type ArticulationElement struct {
 
 // Channel represents the XML data of the same name.
 type Channel struct {
-	Controller []*Controller `xml:"controller"`
-	Program    Program       `xml:"program"`
-	Synti      string        `xml:"synti"`
+	Name            string `xml:"name,attr"`
+	ChannelElements []any
+	// Controller []*Controller `xml:"controller"`
+	// Program    Program       `xml:"program"`
+	Mute  int    `xml:"mute"`
+	Synti string `xml:"synti"`
+}
+
+func (c *Channel) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "Channel"},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("Channel.MarshalXML: %w", err)
+	}
+
+	for _, el := range c.ChannelElements {
+		if err := encoder.Encode(el); err != nil {
+			return fmt.Errorf("Channel.MarshalXML: %w", err)
+		}
+	}
+
+	syntiEl := xml.StartElement{Name: xml.Name{Local: "synti"}}
+	if err := encoder.EncodeElement(c.Synti, syntiEl); err != nil {
+		return fmt.Errorf("Channel.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "Channel"}}); err != nil {
+		return fmt.Errorf("Channel.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+// Implements encoding.xml.Unmarshaler interface
+func (c *Channel) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "name":
+			c.Name = attr.Value
+		default:
+			err := &UnhandledError{Type: "attr", Name: attr.Name.Local, Offset: decoder.InputOffset()}
+			return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+		}
+	}
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+		}
+
+		switch tok := token.(type) {
+		case xml.StartElement:
+			switch tok.Name.Local {
+			case "mute":
+				if err = decoder.DecodeElement(&c.Mute, &tok); err != nil {
+					return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+				}
+			case "synti":
+				if err = decoder.DecodeElement(&c.Synti, &tok); err != nil {
+					return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+				}
+			case "controller":
+				el := &Controller{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+				}
+				c.ChannelElements = append(c.ChannelElements, el)
+			case "program":
+				var el Program
+				if err = decoder.DecodeElement(&el, &tok); err != nil {
+					return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+				}
+				c.ChannelElements = append(c.ChannelElements, el)
+			default:
+				err := &UnhandledError{Type: "token", Name: tok.Name.Local, Offset: decoder.InputOffset()}
+				return fmt.Errorf("Channel.UnmarshalXML: %w", err)
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
 }
 
 // Program represents the XML data of the same name.
@@ -455,9 +537,55 @@ type Program struct {
 	Value string `xml:"value,attr"`
 }
 
+func (p Program) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "program"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "value"},
+				Value: p.Value,
+			},
+		},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("Program.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "program"}}); err != nil {
+		return fmt.Errorf("Program.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
 type Controller struct {
 	Ctrl  int `xml:"ctrl,attr"`
 	Value int `xml:"value,attr"`
+}
+
+func (c *Controller) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "controller"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "ctrl"},
+				Value: fmt.Sprintf("%v", c.Ctrl),
+			},
+			{
+				Name:  xml.Name{Local: "value"},
+				Value: fmt.Sprintf("%v", c.Value),
+			},
+		},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("Bracket.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "controller"}}); err != nil {
+		return fmt.Errorf("Bracket.MarshalXML: %w", err)
+	}
+
+	return nil
 }
 
 type Voice struct {
