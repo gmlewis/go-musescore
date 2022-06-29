@@ -25,13 +25,14 @@ import (
 // ScoreZip represents a MuseScore 3 score in `mscz` (zip'd) format.
 type ScoreZip struct {
 	// MetaInf
-	MuseScore *MuseScore `xml:"museScore"`
+	MuseScore MuseScore `xml:"museScore"`
 	// Thumbnails
 }
 
 var (
 	xmlEndingsToShorten = []string{
 		"></bracket>",
+		"></controller>",
 		"></program>",
 	}
 	xmlEndingsToSplitLines = []string{
@@ -77,14 +78,14 @@ type MuseScore struct {
 	Version         string `xml:"version,attr"`
 	ProgramVersion  string `xml:"programVersion"`
 	ProgramRevision string `xml:"programRevision"`
-	Score           *Score `xml:"Score"`
+	Score           Score  `xml:"Score"`
 }
 
 // Score represents the XML data of the same name.
 type Score struct {
-	LayerTag        *LayerTag     `xml:"LayerTag"`
+	LayerTag        LayerTag      `xml:"LayerTag"`
 	CurrentLayer    int           `xml:"currentLayer"`
-	Synthesizer     *Synthesizer  `xml:"Synthesizer,omitempty"`
+	Synthesizer     *Synthesizer  `xml:"Synthesizer"`
 	Division        int           `xml:"Division"`
 	Style           *Style        `xml:"Style"`
 	ShowInvisible   int           `xml:"showInvisible"`
@@ -92,8 +93,8 @@ type Score struct {
 	ShowFrames      int           `xml:"showFrames"`
 	ShowMargins     int           `xml:"showMargins"`
 	MetaTags        []*MetaTag    `xml:"metaTag"`
-	PageList        *PageList     `xml:"PageList,omitempty"`
-	Part            *Part         `xml:"Part"`
+	PageList        *PageList     `xml:"PageList"`
+	Part            []*Part       `xml:"Part"`
 	Staffs          []*ScoreStaff `xml:"Staff"`
 }
 
@@ -106,7 +107,7 @@ type LayerTag struct {
 // Style represents the XML data of the same name.
 type Style struct {
 	ConcertPitch         int         `xml:"concertPitch,omitempty"`
-	PageLayout           *PageLayout `xml:"page-layout,omitempty"`
+	PageLayout           *PageLayout `xml:"page-layout"`
 	PageWidth            float64     `xml:"pageWidth,omitempty"`
 	PageHeight           float64     `xml:"pageHeight,omitempty"`
 	PagePrintableWidth   float64     `xml:"pagePrintableWidth,omitempty"`
@@ -123,8 +124,9 @@ type MetaTag struct {
 // Part represents the XML data of the same name.
 type Part struct {
 	Staff      []*PartStaff `xml:"Staff"`
+	Show       string       `xml:"show,omitempty"`
 	TrackName  string       `xml:"trackName"`
-	Instrument *Instrument  `xml:"Instrument,omitempty"`
+	Instrument *Instrument  `xml:"Instrument"`
 }
 
 // Staff represents the XML data of the same name.
@@ -376,14 +378,15 @@ func (b *Bracket) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error
 
 // StaffType represents the XML data of the same name.
 type StaffType struct {
-	Group string `xml:"group,attr"`
-	Name  string `xml:"name"`
+	Group  string `xml:"group,attr"`
+	Name   string `xml:"name"`
+	KeySig *int   `xml:"keysig,omitempty"`
 }
 
 // ScoreStaff represents the XML data of the same name.
 type ScoreStaff struct {
 	ID      string     `xml:"id,attr"`
-	VBox    *VBox      `xml:"VBox,omitempty"`
+	VBox    *VBox      `xml:"VBox"`
 	Measure []*Measure `xml:"Measure"`
 }
 
@@ -398,22 +401,24 @@ type Measure struct {
 
 // Instrument represents the XML data of the same name.
 type Instrument struct {
-	LongName     string                 `xml:"longName"`
-	ShortName    string                 `xml:"shortName"`
-	TrackName    string                 `xml:"trackName"`
-	MinPitchP    string                 `xml:"minPitchP"`
-	MaxPitchP    string                 `xml:"maxPitchP"`
-	MinPitchA    string                 `xml:"minPitchA"`
-	MaxPitchA    string                 `xml:"maxPitchA"`
-	InstrumentID string                 `xml:"instrumentId"`
-	Clef         Clef                   `xml:"clef"`
-	Articulation []*ArticulationElement `xml:"Articulation"`
-	Channel      Channel                `xml:"Channel"`
+	LongName           string                 `xml:"longName"`
+	ShortName          string                 `xml:"shortName"`
+	TrackName          string                 `xml:"trackName"`
+	MinPitchP          string                 `xml:"minPitchP,omitempty"`
+	MaxPitchP          string                 `xml:"maxPitchP,omitempty"`
+	MinPitchA          string                 `xml:"minPitchA,omitempty"`
+	MaxPitchA          string                 `xml:"maxPitchA,omitempty"`
+	TransposeDiatonic  string                 `xml:"transposeDiatonic,omitempty"`
+	TransposeChromatic string                 `xml:"transposeChromatic,omitempty"`
+	InstrumentID       string                 `xml:"instrumentId"`
+	Clef               *Clef                  `xml:"clef"`
+	Articulation       []*ArticulationElement `xml:"Articulation"`
+	Channel            Channel                `xml:"Channel"`
 }
 
 // Clef represents the XML data of the same name.
 type Clef struct {
-	Staff string `xml:"staff,attr"`
+	Staff string `xml:"staff,attr,omitempty"`
 	Text  string `xml:",chardata"`
 }
 
@@ -426,8 +431,9 @@ type ArticulationElement struct {
 
 // Channel represents the XML data of the same name.
 type Channel struct {
-	Program Program `xml:"program"`
-	Synti   string  `xml:"synti"`
+	Program    Program       `xml:"program"`
+	Controller []*Controller `xml:"controller"`
+	Synti      string        `xml:"synti"`
 }
 
 // Program represents the XML data of the same name.
@@ -435,9 +441,14 @@ type Program struct {
 	Value string `xml:"value,attr"`
 }
 
+type Controller struct {
+	Ctrl  int `xml:"ctrl,attr"`
+	Value int `xml:"value,attr"`
+}
+
 type Voice struct {
-	KeySig        *KeySig  `xml:"KeySig,omitempty"`
-	TimeSig       *TimeSig `xml:"TimeSig,omitempty"`
+	KeySig        *KeySig  `xml:"KeySig"`
+	TimeSig       *TimeSig `xml:"TimeSig"`
 	TimedElements []any
 	// 	// 	Dynamic *Dynamic `xml:"Dynamic,omitempty"`
 	// 	// 	Tempo *Tempo   `xml:"Tempo,omitempty"`
@@ -648,7 +659,7 @@ type PageList struct {
 }
 
 type Page struct {
-	System *System `xml:"System"`
+	System System `xml:"System"`
 }
 
 type System struct {

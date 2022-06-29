@@ -56,7 +56,7 @@ func New(buf []byte, callback CallbackFn) (*ScoreZip, error) {
 const xmlStart = "<?xml "
 
 func parseXML(buf []byte) (*ScoreZip, error) {
-	var s *MuseScore
+	var s MuseScore
 	if err := xml.Unmarshal(buf, &s); err != nil {
 		return nil, err
 	}

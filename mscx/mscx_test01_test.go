@@ -19,12 +19,12 @@ limitations under the License.
 package mscx
 
 var test01Data = &ScoreZip{
-	MuseScore: &MuseScore{
+	MuseScore: MuseScore{
 		Version:         "3.01",
 		ProgramVersion:  "3.2.3",
 		ProgramRevision: "d2d863f",
-		Score: &Score{
-			LayerTag: &LayerTag{ID: "0", Tag: "default"},
+		Score: Score{
+			LayerTag: LayerTag{ID: "0", Tag: "default"},
 			Division: 480,
 			Style: &Style{
 				PageWidth:          8.27,
@@ -50,48 +50,50 @@ var test01Data = &ScoreZip{
 				{Name: "workNumber"},
 				{Name: "workTitle", Text: "O For a Thousand Tongues to Sing"},
 			},
-			Part: &Part{
-				Staff: []*PartStaff{
-					{
-						StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
-						StaffElements: []any{
-							&Bracket{Type: 1, Span: 2, Col: "0"},
-							BarLineSpan(1),
+			Part: []*Part{
+				{
+					Staff: []*PartStaff{
+						{
+							StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
+							StaffElements: []any{
+								&Bracket{Type: 1, Span: 2, Col: "0"},
+								BarLineSpan(1),
+							},
+							ID: "1",
 						},
-						ID: "1",
-					},
-					{
-						StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
-						StaffElements: []any{
-							&DefaultClef{Value: "F"},
+						{
+							StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
+							StaffElements: []any{
+								&DefaultClef{Value: "F"},
+							},
+							ID: "2",
 						},
-						ID: "2",
 					},
-				},
-				TrackName: "Piano",
-				Instrument: &Instrument{
-					LongName:     "Piano",
-					ShortName:    "Pno.",
-					TrackName:    "Piano",
-					MinPitchP:    "21",
-					MaxPitchP:    "108",
-					MinPitchA:    "21",
-					MaxPitchA:    "108",
-					InstrumentID: "keyboard.piano",
-					Clef:         Clef{Staff: "2", Text: "F"},
-					Articulation: []*ArticulationElement{
-						{Velocity: "100", GateTime: "95"},
-						{Velocity: "100", GateTime: "33", Name: "staccatissimo"},
-						{Velocity: "100", GateTime: "50", Name: "staccato"},
-						{Velocity: "100", GateTime: "67", Name: "portato"},
-						{Velocity: "100", GateTime: "100", Name: "tenuto"},
-						{Velocity: "120", GateTime: "67", Name: "marcato"},
-						{Velocity: "150", GateTime: "100", Name: "sforzato"},
-						{Velocity: "150", GateTime: "50", Name: "sforzatoStaccato"},
-						{Velocity: "120", GateTime: "50", Name: "marcatoStaccato"},
-						{Velocity: "120", GateTime: "100", Name: "marcatoTenuto"},
+					TrackName: "Piano",
+					Instrument: &Instrument{
+						LongName:     "Piano",
+						ShortName:    "Pno.",
+						TrackName:    "Piano",
+						MinPitchP:    "21",
+						MaxPitchP:    "108",
+						MinPitchA:    "21",
+						MaxPitchA:    "108",
+						InstrumentID: "keyboard.piano",
+						Clef:         &Clef{Staff: "2", Text: "F"},
+						Articulation: []*ArticulationElement{
+							{Velocity: "100", GateTime: "95"},
+							{Velocity: "100", GateTime: "33", Name: "staccatissimo"},
+							{Velocity: "100", GateTime: "50", Name: "staccato"},
+							{Velocity: "100", GateTime: "67", Name: "portato"},
+							{Velocity: "100", GateTime: "100", Name: "tenuto"},
+							{Velocity: "120", GateTime: "67", Name: "marcato"},
+							{Velocity: "150", GateTime: "100", Name: "sforzato"},
+							{Velocity: "150", GateTime: "50", Name: "sforzatoStaccato"},
+							{Velocity: "120", GateTime: "50", Name: "marcatoStaccato"},
+							{Velocity: "120", GateTime: "100", Name: "marcatoTenuto"},
+						},
+						Channel: Channel{Program: Program{Value: "0"}, Synti: "Fluid"},
 					},
-					Channel: Channel{Program: Program{Value: "0"}, Synti: "Fluid"},
 				},
 			},
 			Staffs: []*ScoreStaff{

@@ -65,7 +65,8 @@ func processFile(filename string) error {
 
 	strippedGot := strip(string(gotXML))
 	if diff := cmp.Diff(strippedXML, strippedGot); diff != "" {
-		log.Println("gotXML:\n", string(gotXML))
+		fmt.Println("\nwantXML:\n", string(xml))
+		fmt.Println("\ngotXML:\n", string(gotXML))
 		return fmt.Errorf("NewFromFile(%q) got XML differs (-want +got):\n%s", filename, diff)
 	}
 
