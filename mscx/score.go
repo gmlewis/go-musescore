@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"log"
+	"reflect"
 )
 
 // ScoreZip represents a MuseScore 3 score in `mscz` (zip'd) format.
@@ -34,6 +36,11 @@ var (
 		"></bracket>",
 		"></program>",
 	}
+	xmlEndingsToSplitLines = []string{
+		"</Slur>",
+		"</System>",
+		"</Zerberus>",
+	}
 )
 
 // XML renders the embedded MuseScore to XML format.
@@ -47,10 +54,12 @@ func (s *ScoreZip) XML() ([]byte, error) {
 	for _, ending := range xmlEndingsToShorten {
 		result = bytes.ReplaceAll(result, []byte(ending), []byte("/>"))
 	}
+	for _, ending := range xmlEndingsToSplitLines {
+		result = bytes.ReplaceAll(result, []byte(ending), []byte("\n"+ending))
+	}
 	result = bytes.ReplaceAll(result, []byte("&#xA;"), []byte("\n"))
 	result = bytes.ReplaceAll(result, []byte("&#39;"), []byte("'"))
 	result = bytes.ReplaceAll(result, []byte("  </"), []byte("    </"))
-	result = bytes.ReplaceAll(result, []byte("</Slur>"), []byte("\n</Slur>"))
 	result = bytes.ReplaceAll(result, []byte("</MuseScore>"), []byte("  </museScore>\n"))
 	return result, nil
 }
@@ -67,6 +76,7 @@ type MuseScore struct {
 type Score struct {
 	LayerTag        *LayerTag     `xml:"LayerTag"`
 	CurrentLayer    int           `xml:"currentLayer"`
+	Synthesizer     *Synthesizer  `xml:"Synthesizer,omitempty"`
 	Division        int           `xml:"Division"`
 	Style           *Style        `xml:"Style"`
 	ShowInvisible   int           `xml:"showInvisible"`
@@ -74,6 +84,7 @@ type Score struct {
 	ShowFrames      int           `xml:"showFrames"`
 	ShowMargins     int           `xml:"showMargins"`
 	MetaTags        []*MetaTag    `xml:"metaTag"`
+	PageList        *PageList     `xml:"PageList,omitempty"`
 	Part            *Part         `xml:"Part"`
 	Staffs          []*ScoreStaff `xml:"Staff"`
 }
@@ -86,17 +97,19 @@ type LayerTag struct {
 
 // Style represents the XML data of the same name.
 type Style struct {
-	PageWidth            float64 `xml:"pageWidth"`
-	PageHeight           float64 `xml:"pageHeight"`
-	PagePrintableWidth   float64 `xml:"pagePrintableWidth"`
-	UseStandardNoteNames int     `xml:"useStandardNoteNames,omitempty"`
-	Spatium              float64 `xml:"Spatium"`
+	ConcertPitch         int         `xml:"concertPitch,omitempty"`
+	PageLayout           *PageLayout `xml:"page-layout,omitempty"`
+	PageWidth            float64     `xml:"pageWidth,omitempty"`
+	PageHeight           float64     `xml:"pageHeight,omitempty"`
+	PagePrintableWidth   float64     `xml:"pagePrintableWidth,omitempty"`
+	UseStandardNoteNames int         `xml:"useStandardNoteNames,omitempty"`
+	Spatium              float64     `xml:"Spatium"`
 }
 
 // MetaTag represents the XML data of the same name.
 type MetaTag struct {
-	Text string `xml:",chardata"`
 	Name string `xml:"name,attr"`
+	Text string `xml:",chardata"`
 }
 
 // Part represents the XML data of the same name.
@@ -108,38 +121,202 @@ type Part struct {
 
 // Staff represents the XML data of the same name.
 type PartStaff struct {
-	StaffType   StaffType `xml:"StaffType"`
-	Bracket     *Bracket  `xml:"bracket,omitempty"`
-	BarLineSpan int       `xml:"barLineSpan,omitempty"`
-	ID          string    `xml:"id,attr"`
-	DefaultClef string    `xml:"defaultClef,omitempty"`
+	ID            string    `xml:"id,attr"`
+	StaffType     StaffType `xml:"StaffType"`
+	StaffElements []any
+}
+
+func (p *PartStaff) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "Staff"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "id"},
+				Value: p.ID,
+			},
+		},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("PartStaff.MarshalXML: %w", err)
+	}
+
+	if err := encoder.Encode(p.StaffType); err != nil {
+		return fmt.Errorf("PartStaff.MarshalXML: %w", err)
+	}
+
+	for _, el := range p.StaffElements {
+		if err := encoder.Encode(el); err != nil {
+			return fmt.Errorf("PartStaff.MarshalXML: %w", err)
+		}
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "Staff"}}); err != nil {
+		return fmt.Errorf("PartStaff.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+// Implements encoding.xml.Unmarshaler interface
+func (p *PartStaff) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "id":
+			p.ID = attr.Value
+		default:
+			return fmt.Errorf("PartStaff.UnmarshalXML: unhandled attr: %v", attr.Name.Local)
+		}
+	}
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+		}
+
+		switch tok := token.(type) {
+		case xml.StartElement:
+			switch tok.Name.Local {
+			case "StaffType":
+				if err = decoder.DecodeElement(&p.StaffType, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+			case "ID":
+				if err = decoder.DecodeElement(&p.ID, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+			case "bracket":
+				el := &Bracket{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(*p)=%#v", reflect.TypeOf(*p))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(*p)=%#v", reflect.ValueOf(*p))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(el)=%#v", reflect.TypeOf(el))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(el)=%#v", reflect.ValueOf(el))
+				p.StaffElements = append(p.StaffElements, el)
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(p.StaffElements)=%#v", reflect.TypeOf(p.StaffElements))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(p.StaffElements)=%#v", reflect.ValueOf(p.StaffElements))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(p.StaffElements[-1])=%#v", reflect.TypeOf(p.StaffElements[len(p.StaffElements)-1]))
+				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(p.StaffElements[-1])=%#v", reflect.ValueOf(p.StaffElements[len(p.StaffElements)-1]))
+			case "barLineSpan":
+				el := BarLineSpan(0)
+				if err = decoder.DecodeElement(&el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			case "defaultClef":
+				el := DefaultClef("")
+				if err = decoder.DecodeElement(&el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			default:
+				return fmt.Errorf("PartStaff.UnmarshalXML: unhandled token: %v", tok.Name.Local)
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
+}
+
+type BarLineSpan int
+
+func (b BarLineSpan) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "barLineSpan"},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("BarLineSpan.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.CharData(fmt.Sprintf("%v", b))); err != nil {
+		return fmt.Errorf("BarLineSpan.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "barLineSpan"}}); err != nil {
+		return fmt.Errorf("BarLineSpan.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+type DefaultClef string
+
+func (d DefaultClef) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "defaultClef"},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.CharData(d)); err != nil {
+		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "defaultClef"}}); err != nil {
+		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
+	}
+
+	return nil
 }
 
 // Bracket represents the XML data of the same name.
 type Bracket struct {
-	Type string `xml:"type,attr"`
-	Span string `xml:"span,attr"`
-	Col  string `xml:"col,attr"`
+	Type int    `xml:"type,attr"`
+	Span int    `xml:"span,attr"`
+	Col  string `xml:"col,attr,omitempty"`
+}
+
+func (b *Bracket) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "bracket"},
+		Attr: []xml.Attr{
+			{
+				Name:  xml.Name{Local: "type"},
+				Value: fmt.Sprintf("%v", b.Type),
+			},
+			{
+				Name:  xml.Name{Local: "span"},
+				Value: fmt.Sprintf("%v", b.Span),
+			},
+			{
+				Name:  xml.Name{Local: "col"},
+				Value: b.Col,
+			},
+		},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("Bracket.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "bracket"}}); err != nil {
+		return fmt.Errorf("Bracket.MarshalXML: %w", err)
+	}
+
+	return nil
 }
 
 // StaffType represents the XML data of the same name.
 type StaffType struct {
-	Name  string `xml:"name"`
 	Group string `xml:"group,attr"`
+	Name  string `xml:"name"`
 }
 
 // ScoreStaff represents the XML data of the same name.
 type ScoreStaff struct {
+	ID      string     `xml:"id,attr"`
 	VBox    *VBox      `xml:"VBox,omitempty"`
 	Measure []*Measure `xml:"Measure"`
-	ID      string     `xml:"id,attr"`
 }
 
 // Measure represents the XML data of the same name.
 type Measure struct {
+	Len         string   `xml:"len,attr,omitempty"`
 	Irregular   int      `xml:"irregular,omitempty"`
 	Voice       []*Voice `xml:"voice"`
-	Len         string   `xml:"len,attr,omitempty"`
 	StartRepeat string   `xml:"startRepeat,omitempty"`
 	EndRepeat   string   `xml:"endRepeat,omitempty"`
 }
@@ -167,9 +344,9 @@ type Clef struct {
 
 // ArticulationElement represents the XML data of the same name.
 type ArticulationElement struct {
+	Name     string `xml:"name,attr,omitempty"`
 	Velocity string `xml:"velocity"`
 	GateTime string `xml:"gateTime"`
-	Name     string `xml:"name,attr,omitempty"`
 }
 
 // Channel represents the XML data of the same name.
@@ -202,36 +379,29 @@ type Voice struct {
 // Implements encoding.xml.Marshaler interface
 func (v *Voice) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 	if err := encoder.EncodeToken(xml.StartElement{Name: xml.Name{Local: "voice"}}); err != nil {
-		return err
-	}
-
-	for _, attr := range start.Attr {
-		switch attr.Name.Local {
-		default:
-			return fmt.Errorf("voice: unhandled attr: %v", attr.Name.Local)
-		}
+		return fmt.Errorf("Voice.MarshalXML: %w", err)
 	}
 
 	if v.KeySig != nil {
 		if err := encoder.Encode(v.KeySig); err != nil {
-			return err
+			return fmt.Errorf("Voice.MarshalXML: %w", err)
 		}
 	}
 
 	if v.TimeSig != nil {
 		if err := encoder.Encode(v.TimeSig); err != nil {
-			return err
+			return fmt.Errorf("Voice.MarshalXML: %w", err)
 		}
 	}
 
 	for _, el := range v.TimedElements {
 		if err := encoder.Encode(el); err != nil {
-			return err
+			return fmt.Errorf("Voice.MarshalXML: %w", err)
 		}
 	}
 
 	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "voice"}}); err != nil {
-		return err
+		return fmt.Errorf("Voice.MarshalXML: %w", err)
 	}
 
 	return nil
@@ -242,14 +412,14 @@ func (v *Voice) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 	for _, attr := range start.Attr {
 		switch attr.Name.Local {
 		default:
-			return fmt.Errorf("voice: unhandled attr: %v", attr.Name.Local)
+			return fmt.Errorf("Voice.UnmarshalXML: unhandled attr: %v", attr.Name.Local)
 		}
 	}
 
 	for {
 		token, err := decoder.Token()
 		if err != nil {
-			return err
+			return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 		}
 
 		switch tok := token.(type) {
@@ -257,32 +427,32 @@ func (v *Voice) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 			switch tok.Name.Local {
 			case "KeySig":
 				if err = decoder.DecodeElement(&v.KeySig, &tok); err != nil {
-					return err
+					return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 				}
 			case "TimeSig":
 				if err = decoder.DecodeElement(&v.TimeSig, &tok); err != nil {
-					return err
+					return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 				}
 			case "Chord":
 				el := &Chord{}
 				if err = decoder.DecodeElement(el, &tok); err != nil {
-					return err
+					return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 				}
 				v.TimedElements = append(v.TimedElements, el)
 			case "Rest":
 				el := &Rest{}
 				if err = decoder.DecodeElement(el, &tok); err != nil {
-					return err
+					return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 				}
 				v.TimedElements = append(v.TimedElements, el)
 			case "BarLine":
 				el := &BarLine{}
 				if err = decoder.DecodeElement(el, &tok); err != nil {
-					return err
+					return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 				}
 				v.TimedElements = append(v.TimedElements, el)
 			default:
-				return fmt.Errorf("voice: unhandled token: %v", tok.Name.Local)
+				return fmt.Errorf("Voice.UnmarshalXML: unhandled token: %v", tok.Name.Local)
 			}
 
 		case xml.EndElement:
@@ -364,4 +534,45 @@ type Location struct {
 type Note struct {
 	Pitch int `xml:"pitch"`
 	TPC   int `xml:"tpc"`
+}
+
+type Synthesizer struct {
+	Master   *SynthVals `xml:"master"`
+	Fluid    *SynthVals `xml:"Fluid"`
+	Zerberus *SynthVals `xml:"Zerberus"`
+	Zita1    *SynthVals `xml:"Zita1"`
+}
+
+type SynthVals struct {
+	Val []*Val `xml:"val"`
+}
+
+type Val struct {
+	ID   int    `xml:"id,attr"`
+	Text string `xml:",chardata"`
+}
+
+type PageLayout struct {
+	PageHeight  float64        `xml:"page-height"`
+	PageWidth   float64        `xml:"page-width"`
+	PageMargins []*PageMargins `xml:"page-margins"`
+}
+
+type PageMargins struct {
+	Type         string  `xml:"type,attr"`
+	LeftMargin   float64 `xml:"left-margin"`
+	RightMargin  float64 `xml:"right-margin"`
+	TopMargin    float64 `xml:"top-margin"`
+	BottomMargin float64 `xml:"bottom-margin"`
+}
+
+type PageList struct {
+	Page []*Page `xml:"Page"`
+}
+
+type Page struct {
+	System *System `xml:"System"`
+}
+
+type System struct {
 }

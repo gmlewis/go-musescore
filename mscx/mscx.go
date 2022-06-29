@@ -16,7 +16,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-//  Package mscx parses MuseScore 3 `*.mscx` or `*.mscz` files into Go structs.
+// Package mscx parses MuseScore 3 `*.mscx` or `*.mscz` files into Go structs.
 package mscx
 
 import (
@@ -70,7 +70,7 @@ func parseZip(buf []byte, callback CallbackFn) (*ScoreZip, error) {
 
 	var result *ScoreZip
 	for _, fh := range r.File {
-		log.Printf("fh.Name=%v", fh.Name)
+		// log.Printf("fh.Name=%v", fh.Name)
 		if fh.FileInfo().IsDir() {
 			log.Printf("found dir: %v", fh.Name)
 			continue

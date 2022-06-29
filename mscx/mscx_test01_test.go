@@ -53,15 +53,19 @@ var test01Data = &ScoreZip{
 			Part: &Part{
 				Staff: []*PartStaff{
 					{
-						StaffType:   StaffType{Name: "stdNormal", Group: "pitched"},
-						Bracket:     &Bracket{Type: "1", Span: "2", Col: "0"},
-						BarLineSpan: 1,
-						ID:          "1",
+						StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
+						StaffElements: []any{
+							&Bracket{Type: 1, Span: 2, Col: "0"},
+							BarLineSpan(1),
+						},
+						ID: "1",
 					},
 					{
-						StaffType:   StaffType{Name: "stdNormal", Group: "pitched"},
-						ID:          "2",
-						DefaultClef: "F",
+						StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
+						StaffElements: []any{
+							DefaultClef("F"),
+						},
+						ID: "2",
 					},
 				},
 				TrackName: "Piano",
