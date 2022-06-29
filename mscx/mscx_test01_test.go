@@ -109,8 +109,8 @@ var test01Data = &ScoreZip{
 					VBox: &VBox{
 						Height: "10",
 						Text: []TextElement{
-							{Style: "Title", Text: "O For a Thousand Tongues to Sing"},
-							{Style: "Composer", Text: "Charles Wesley"},
+							{Style: "Title", Text: []byte("O For a Thousand Tongues to Sing")},
+							{Style: "Composer", Text: []byte("Charles Wesley")},
 						},
 					},
 					Measure: []*Measure{

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
+	"strconv"
 )
 
 // ScoreZip represents a MuseScore 3 score in `mscz` (zip'd) format.
@@ -33,7 +34,10 @@ var (
 	xmlEndingsToShorten = []string{
 		"></bracket>",
 		"></controller>",
+		"></endSpanner>",
+		"></pos>",
 		"></program>",
+		"></size>",
 	}
 	xmlEndingsToSplitLines = []string{
 		"</Slur>",
@@ -75,7 +79,8 @@ func (s *ScoreZip) XML() ([]byte, error) {
 
 // MuseScore represents MuseScore 3 data in XML.
 type MuseScore struct {
-	Version         string `xml:"version,attr"`
+	Version string `xml:"version,attr"`
+
 	ProgramVersion  string `xml:"programVersion"`
 	ProgramRevision string `xml:"programRevision"`
 	Score           Score  `xml:"Score"`
@@ -118,6 +123,7 @@ type Style struct {
 // MetaTag represents the XML data of the same name.
 type MetaTag struct {
 	Name string `xml:"name,attr"`
+
 	Text string `xml:",chardata"`
 }
 
@@ -131,7 +137,8 @@ type Part struct {
 
 // PartStaff represents the XML data of the same name.
 type PartStaff struct {
-	ID            string    `xml:"id,attr"`
+	ID string `xml:"id,attr"`
+
 	StaffType     StaffType `xml:"StaffType"`
 	StaffElements []any
 }
@@ -378,7 +385,8 @@ func (b *Bracket) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error
 
 // StaffType represents the XML data of the same name.
 type StaffType struct {
-	Group  string `xml:"group,attr"`
+	Group string `xml:"group,attr"`
+
 	Name   string `xml:"name"`
 	Lines  int    `xml:"lines,omitempty"`
 	KeySig *int   `xml:"keysig,omitempty"`
@@ -386,24 +394,277 @@ type StaffType struct {
 
 // ScoreStaff represents the XML data of the same name.
 type ScoreStaff struct {
-	ID      string     `xml:"id,attr"`
+	ID string `xml:"id,attr"`
+
 	VBox    *VBox      `xml:"VBox"`
 	Measure []*Measure `xml:"Measure"`
 }
 
 // Measure represents the XML data of the same name.
 type Measure struct {
-	Len         string   `xml:"len,attr,omitempty"`
+	Len    string `xml:"len,attr,omitempty"`
+	Number int    `xml:"number,attr,omitempty"`
+
 	Irregular   int      `xml:"irregular,omitempty"`
 	Voice       []*Voice `xml:"voice"`
 	StartRepeat string   `xml:"startRepeat,omitempty"`
 	EndRepeat   string   `xml:"endRepeat,omitempty"`
+
+	// older versions
+	KeySig        *KeySig  `xml:"KeySig"`
+	TimeSig       *TimeSig `xml:"TimeSig"`
+	Tempo         *Tempo   `xml:"Tempo"`
+	TimedElements []any
 }
+
+// Implements encoding.xml.Marshaler interface
+func (m *Measure) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "Measure"},
+	}
+	if m.Len != "" {
+		se.Attr = append(se.Attr, xml.Attr{
+			Name:  xml.Name{Local: "len"},
+			Value: m.Len,
+		})
+	}
+	if m.Number != 0 {
+		se.Attr = append(se.Attr, xml.Attr{
+			Name:  xml.Name{Local: "number"},
+			Value: fmt.Sprintf("%v", m.Number),
+		})
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("Measure.MarshalXML: %w", err)
+	}
+
+	if m.Irregular != 0 {
+		irregularEl := xml.StartElement{Name: xml.Name{Local: "irregular"}}
+		if err := encoder.EncodeElement(m.Irregular, irregularEl); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.Voice != nil {
+		if err := encoder.Encode(m.Voice); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.StartRepeat != "" {
+		if err := encoder.Encode(m.StartRepeat); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.EndRepeat != "" {
+		if err := encoder.Encode(m.EndRepeat); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.KeySig != nil {
+		if err := encoder.Encode(m.KeySig); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.TimeSig != nil {
+		if err := encoder.Encode(m.TimeSig); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if m.Tempo != nil {
+		if err := encoder.Encode(m.Tempo); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	for _, el := range m.TimedElements {
+		if err := encoder.Encode(el); err != nil {
+			return fmt.Errorf("Measure.MarshalXML: %w", err)
+		}
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "Measure"}}); err != nil {
+		return fmt.Errorf("Measure.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+// Implements encoding.xml.Unmarshaler interface
+func (m *Measure) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		case "len":
+			m.Len = attr.Value
+		case "number":
+			v, err := strconv.Atoi(attr.Value)
+			if err != nil {
+				return fmt.Errorf("Measure.UnmarshalXML: Atoi: %w", err)
+			}
+			m.Number = v
+		default:
+			err := &UnhandledError{Type: "attr", Name: attr.Name.Local, Offset: decoder.InputOffset()}
+			return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+		}
+	}
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+		}
+
+		switch tok := token.(type) {
+		case xml.StartElement:
+			switch tok.Name.Local {
+			case "irregular":
+				if err = decoder.DecodeElement(&m.Irregular, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+			case "voice":
+				if err = decoder.DecodeElement(&m.Voice, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+			case "KeySig":
+				if err = decoder.DecodeElement(&m.KeySig, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+			case "TimeSig":
+				if err = decoder.DecodeElement(&m.TimeSig, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+			case "Tempo":
+				if err = decoder.DecodeElement(&m.Tempo, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+			case "tick":
+				el := Tick(0)
+				if err = decoder.DecodeElement(&el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "Clef":
+				el := &Clef{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "Dynamic":
+				el := &Dynamic{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "endSpanner":
+				el := &EndSpanner{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "HairPin":
+				el := &HairPin{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "LayoutBreak":
+				el := &LayoutBreak{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "StaffText":
+				el := &StaffText{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "Chord":
+				el := &Chord{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "Rest":
+				el := &Rest{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			case "BarLine":
+				el := &BarLine{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+				}
+				m.TimedElements = append(m.TimedElements, el)
+			default:
+				err := &UnhandledError{Type: "token", Name: tok.Name.Local, Offset: decoder.InputOffset()}
+				return fmt.Errorf("Measure.UnmarshalXML: %w", err)
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
+}
+
+type EndSpanner struct {
+	ID int `xml:"id,attr"`
+}
+
+type HairPin struct {
+	ID int `xml:"id,attr"`
+
+	Subtype      string       `xml:"subtype"`
+	VeloChange   int          `xml:"veloChange,omitempty"`
+	Segment      *Segment     `xml:"Segment"`
+	BeginText    *TextElement `xml:"beginText"`
+	ContinueText *TextElement `xml:"continueText"`
+}
+
+type Segment struct {
+	Subtype string   `xml:"subtype"`
+	Off2    *TextPos `xml:"off2"`
+	Visible int      `xml:"visible"`
+}
+
+type Tick int64
+
+type Dynamic struct {
+	Subtype  string `xml:"subtype"`
+	Velocity int    `xml:"velocity,omitempty"`
+}
+
+type LayoutBreak struct {
+	Subtype string `xml:"subtype"`
+}
+
+type Tempo struct {
+	Tempo      float64  `xml:"tempo"`
+	FollowText int      `xml:"followText,omitempty"`
+	Pos        *TextPos `xml:"pos"`
+	Visible    int      `xml:"visible"`
+	Text       []byte   `xml:"text"`
+}
+
+type StaffText struct {
+	Pos   *TextPos `xml:"pos"`
+	Style string   `xml:"style,omitempty"`
+	Text  []byte   `xml:"text"`
+}
+
+// type TempoText struct {
+// 	Text []byte `xml:",chardata"`
+// }
 
 // Instrument represents the XML data of the same name.
 type Instrument struct {
-	LongName           string `xml:"longName"`
-	ShortName          string `xml:"shortName"`
+	LongName           string `xml:"longName,omitempty"`
+	ShortName          string `xml:"shortName,omitempty"`
 	TrackName          string `xml:"trackName"`
 	MinPitchP          string `xml:"minPitchP,omitempty"`
 	MaxPitchP          string `xml:"maxPitchP,omitempty"`
@@ -416,13 +677,22 @@ type Instrument struct {
 	UseDrumset int     `xml:"useDrumset,omitempty"`
 	Drum       []*Drum `xml:"Drum"`
 
-	Clef         *Clef                  `xml:"clef"`
+	Clef *Clef `xml:"clef"`
+
+	StringData *StringData `xml:"StringData"`
+
 	Articulation []*ArticulationElement `xml:"Articulation"`
 	Channel      []*Channel             `xml:"Channel"`
 }
 
+type StringData struct {
+	Frets  int   `xml:"frets"`
+	String []int `xml:"string"`
+}
+
 type Drum struct {
-	Pitch    int    `xml:"pitch,attr"`
+	Pitch int `xml:"pitch,attr"`
+
 	Head     int    `xml:"head"`
 	Line     int    `xml:"line"`
 	Voice    int    `xml:"voice"`
@@ -434,29 +704,41 @@ type Drum struct {
 // Clef represents the XML data of the same name.
 type Clef struct {
 	Staff string `xml:"staff,attr,omitempty"`
-	Text  string `xml:",chardata"`
+
+	ConcertClefType     string `xml:"concertClefType,omitempty"`
+	TransposingClefType string `xml:"transposingClefType,omitempty"`
+
+	Text string `xml:",chardata"`
 }
 
 // ArticulationElement represents the XML data of the same name.
 type ArticulationElement struct {
-	Name     string `xml:"name,attr,omitempty"`
+	Name string `xml:"name,attr,omitempty"`
+
 	Velocity string `xml:"velocity"`
 	GateTime string `xml:"gateTime"`
 }
 
 // Channel represents the XML data of the same name.
 type Channel struct {
-	Name            string `xml:"name,attr"`
+	Name string `xml:"name,attr"`
+
 	ChannelElements []any
 	// Controller []*Controller `xml:"controller"`
 	// Program    Program       `xml:"program"`
-	Mute  int    `xml:"mute"`
 	Synti string `xml:"synti"`
+	Mute  int    `xml:"mute,omitempty"`
 }
 
 func (c *Channel) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 	se := xml.StartElement{
 		Name: xml.Name{Local: "Channel"},
+	}
+	if c.Name != "" {
+		se.Attr = append(se.Attr, xml.Attr{
+			Name:  xml.Name{Local: "name"},
+			Value: c.Name,
+		})
 	}
 	if err := encoder.EncodeToken(se); err != nil {
 		return fmt.Errorf("Channel.MarshalXML: %w", err)
@@ -471,6 +753,13 @@ func (c *Channel) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error
 	syntiEl := xml.StartElement{Name: xml.Name{Local: "synti"}}
 	if err := encoder.EncodeElement(c.Synti, syntiEl); err != nil {
 		return fmt.Errorf("Channel.MarshalXML: %w", err)
+	}
+
+	if c.Mute != 0 {
+		muteEl := xml.StartElement{Name: xml.Name{Local: "mute"}}
+		if err := encoder.EncodeElement(c.Mute, muteEl); err != nil {
+			return fmt.Errorf("Channel.MarshalXML: %w", err)
+		}
 	}
 
 	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "Channel"}}); err != nil {
@@ -704,18 +993,38 @@ type KeySig struct {
 }
 
 type TimeSig struct {
-	SigN string `xml:"sigN"`
-	SigD string `xml:"sigD"`
+	SigN            string `xml:"sigN"`
+	SigD            string `xml:"sigD"`
+	ShowCourtesySig int    `xml:"showCourtesySig,omitempty"`
+}
+
+type ImageElement struct {
+	Pos      *TextPos  `xml:"pos"`
+	Path     string    `xml:"path"`
+	LinkPath string    `xml:"linkPath"`
+	Size     ImageSize `xml:"size"`
+}
+
+type ImageSize struct {
+	W float64 `xml:"w,attr"`
+	H float64 `xml:"h,attr"`
 }
 
 type TextElement struct {
-	Style StyleEnum `xml:"style"`
-	Text  string    `xml:"text"`
+	Pos   *TextPos  `xml:"pos"`
+	Style StyleEnum `xml:"style,omitempty"`
+	Text  []byte    `xml:"text"`
+}
+
+type TextPos struct {
+	X float64 `xml:"x,attr"`
+	Y float64 `xml:"y,attr"`
 }
 
 type VBox struct {
-	Height string        `xml:"height"`
-	Text   []TextElement `xml:"Text"`
+	Height string         `xml:"height"`
+	Text   []TextElement  `xml:"Text"`
+	Image  []ImageElement `xml:"Image"`
 }
 
 type StyleEnum string
@@ -743,7 +1052,8 @@ type Lyrics struct {
 }
 
 type Spanner struct {
-	Type string    `xml:"type,attr"`
+	Type string `xml:"type,attr"`
+
 	Slur *Slur     `xml:"Slur"`
 	Next *NextPrev `xml:"next"`
 	Prev *NextPrev `xml:"prev"`
@@ -778,7 +1088,8 @@ type SynthVals struct {
 }
 
 type Val struct {
-	ID   int    `xml:"id,attr"`
+	ID int `xml:"id,attr"`
+
 	Text string `xml:",chardata"`
 }
 
@@ -789,7 +1100,8 @@ type PageLayout struct {
 }
 
 type PageMargins struct {
-	Type         string  `xml:"type,attr"`
+	Type string `xml:"type,attr"`
+
 	LeftMargin   float64 `xml:"left-margin"`
 	RightMargin  float64 `xml:"right-margin"`
 	TopMargin    float64 `xml:"top-margin"`
