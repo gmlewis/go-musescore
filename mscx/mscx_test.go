@@ -98,25 +98,54 @@ func TestNew(t *testing.T) {
 					xml = buf
 				}
 			}
-
 			got, err := New(test01, cb)
 			if err != nil {
 				t.Fatal(err)
 			}
+			strippedXML := strip(string(xml))
 
+			// Compare Go structs to Go structs
 			if diff := cmp.Diff(tt.want, got); diff != "" {
-				t.Errorf("New(%q) differs (-want +got):\n%s", tt.name, diff)
+				t.Errorf("New(%q) Go structs to Go struct differs (-want +got):\n%s", tt.name, diff)
 			}
 
+			// Compare XML in to Go "tt.want" structs (as XML)
+			wantXML, err := tt.want.XML()
+			if err != nil {
+				t.Fatalf("tt.want.XML: %v", err)
+			}
+
+			strippedWant := strip(string(wantXML))
+			if diff := cmp.Diff(strippedXML, strippedWant); diff != "" {
+				t.Log("strippedXML:\n", string(strippedXML))
+				t.Log("wantXML:\n", string(wantXML))
+				t.Errorf("New(%q) tt.want XML differs (-want('orig') +got('tt.want')):\n%s", tt.name, diff)
+			}
+
+			// Compare XML in to XML out
 			gotXML, err := got.XML()
 			if err != nil {
 				t.Fatalf("got.XML: %v", err)
 			}
 
-			if diff := cmp.Diff(string(xml), string(gotXML)); diff != "" {
-				t.Logf(string(gotXML))
-				t.Fatalf("New(%q) XML differs (-want +got):\n%s", tt.name, diff)
+			strippedGot := strip(string(gotXML))
+			if diff := cmp.Diff(strippedXML, strippedGot); diff != "" {
+				t.Log("gotXML:\n", string(gotXML))
+				t.Fatalf("New(%q) got XML differs (-want +got):\n%s", tt.name, diff)
 			}
 		})
 	}
+}
+
+func strip(s string) string {
+	lines := strings.Split(s, "\n")
+	result := make([]string, 0, len(lines))
+	for _, line := range lines {
+		v := strings.TrimSpace(line)
+		if v == "" {
+			continue
+		}
+		result = append(result, v)
+	}
+	return strings.Join(result, "\n")
 }

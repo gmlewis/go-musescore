@@ -19,6 +19,7 @@ package mscx
 import (
 	"bytes"
 	"encoding/xml"
+	"fmt"
 )
 
 // ScoreZip represents a MuseScore 3 score in `mscz` (zip'd) format.
@@ -49,6 +50,8 @@ func (s *ScoreZip) XML() ([]byte, error) {
 	result = bytes.ReplaceAll(result, []byte("&#xA;"), []byte("\n"))
 	result = bytes.ReplaceAll(result, []byte("&#39;"), []byte("'"))
 	result = bytes.ReplaceAll(result, []byte("  </"), []byte("    </"))
+	result = bytes.ReplaceAll(result, []byte("</Slur>"), []byte("\n</Slur>"))
+	result = bytes.ReplaceAll(result, []byte("</MuseScore>"), []byte("  </museScore>\n"))
 	return result, nil
 }
 
@@ -134,11 +137,11 @@ type ScoreStaff struct {
 
 // Measure represents the XML data of the same name.
 type Measure struct {
-	Irregular   int    `xml:"irregular,omitempty"`
-	Voice       *Voice `xml:"voice"`
-	Len         string `xml:"len,attr,omitempty"`
-	StartRepeat string `xml:"startRepeat,omitempty"`
-	EndRepeat   string `xml:"endRepeat,omitempty"`
+	Irregular   int      `xml:"irregular,omitempty"`
+	Voice       []*Voice `xml:"voice"`
+	Len         string   `xml:"len,attr,omitempty"`
+	StartRepeat string   `xml:"startRepeat,omitempty"`
+	EndRepeat   string   `xml:"endRepeat,omitempty"`
 }
 
 // Instrument represents the XML data of the same name.
@@ -181,9 +184,9 @@ type Program struct {
 }
 
 type Voice struct {
-	// KeySig   *KeySig  `xml:"KeySig,omitempty"`
-	// TimeSig  *TimeSig `xml:"TimeSig,omitempty"`
-	Children []byte `xml:",innerxml"`
+	KeySig        *KeySig  `xml:"KeySig,omitempty"`
+	TimeSig       *TimeSig `xml:"TimeSig,omitempty"`
+	TimedElements []any
 	// 	// 	Dynamic *Dynamic `xml:"Dynamic,omitempty"`
 	// 	// 	Tempo *Tempo   `xml:"Tempo,omitempty"`
 	// 	Chord []*Chord `xml:"Chord"`
@@ -196,6 +199,98 @@ type Voice struct {
 	// 	// 	StaffText *StaffText `xml:"StaffText,omitempty"`
 }
 
+// Implements encoding.xml.Marshaler interface
+func (v *Voice) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	if err := encoder.EncodeToken(xml.StartElement{Name: xml.Name{Local: "voice"}}); err != nil {
+		return err
+	}
+
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		default:
+			return fmt.Errorf("voice: unhandled attr: %v", attr.Name.Local)
+		}
+	}
+
+	if v.KeySig != nil {
+		if err := encoder.Encode(v.KeySig); err != nil {
+			return err
+		}
+	}
+
+	if v.TimeSig != nil {
+		if err := encoder.Encode(v.TimeSig); err != nil {
+			return err
+		}
+	}
+
+	for _, el := range v.TimedElements {
+		if err := encoder.Encode(el); err != nil {
+			return err
+		}
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "voice"}}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Implements encoding.xml.Unmarshaler interface
+func (v *Voice) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error {
+	for _, attr := range start.Attr {
+		switch attr.Name.Local {
+		default:
+			return fmt.Errorf("voice: unhandled attr: %v", attr.Name.Local)
+		}
+	}
+
+	for {
+		token, err := decoder.Token()
+		if err != nil {
+			return err
+		}
+
+		switch tok := token.(type) {
+		case xml.StartElement:
+			switch tok.Name.Local {
+			case "KeySig":
+				if err = decoder.DecodeElement(&v.KeySig, &tok); err != nil {
+					return err
+				}
+			case "TimeSig":
+				if err = decoder.DecodeElement(&v.TimeSig, &tok); err != nil {
+					return err
+				}
+			case "Chord":
+				el := &Chord{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return err
+				}
+				v.TimedElements = append(v.TimedElements, el)
+			case "Rest":
+				el := &Rest{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return err
+				}
+				v.TimedElements = append(v.TimedElements, el)
+			case "BarLine":
+				el := &BarLine{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return err
+				}
+				v.TimedElements = append(v.TimedElements, el)
+			default:
+				return fmt.Errorf("voice: unhandled token: %v", tok.Name.Local)
+			}
+
+		case xml.EndElement:
+			return nil
+		}
+	}
+}
+
 type Rest struct {
 	DurationType string `xml:"durationType"`
 }
@@ -204,142 +299,14 @@ type BarLine struct {
 	Subtype string `xml:"subtype"`
 }
 
-// type ChordElement struct {
-// 	DurationType BaseNote           `xml:"durationType"`
-// 	Note         *StickyNote        `xml:"Note"`
-// 	Dots         *string            `xml:"dots,omitempty"`
-// 	Articulation *ArticulationUnion `xml:"Articulation"`
-// 	Spanner      *ChordSpanner      `xml:"Spanner"`
-// 	BeamMode     *string            `xml:"BeamMode,omitempty"`
-// }
-//
-// type PurpleNote struct {
-// 	Pitch      string       `xml:"pitch"`
-// 	Tpc        string       `xml:"tpc"`
-// 	Accidental *Accidental  `xml:"Accidental,omitempty"`
-// 	Spanner    *NoteSpanner `xml:"Spanner,omitempty"`
-// }
-//
-// type Accidental struct {
-// 	Subtype Subtype `xml:"subtype"`
-// 	Role    *string `xml:"role,omitempty"`
-// }
-//
-// type NoteSpanner struct {
-// 	Tie  *string     `xml:"Tie,omitempty"`
-// 	Next *PurpleNext `xml:"next,omitempty"`
-// 	Type PurpleType  `xml:"type,attr"`
-// 	Prev *PurpleNext `xml:"prev,omitempty"`
-// 	Slur *string     `xml:"Slur,omitempty"`
-// }
-//
-// type PurpleNext struct {
-// 	Location PurpleLocation `xml:"location"`
-// }
-//
-// type PurpleLocation struct {
-// 	Fractions Fractions `xml:"fractions"`
-// }
-//
-// type FluffyNote struct {
-// 	Pitch      string   `xml:"pitch"`
-// 	Tpc        string   `xml:"tpc"`
-// 	Accidental *BarLine `xml:"Accidental,omitempty"`
-// }
-//
-// type PurpleChord struct {
-// 	Dots         *string     `xml:"dots,omitempty"`
-// 	DurationType string      `xml:"durationType"`
-// 	Note         *IndigoNote `xml:"Note"`
-// 	Articulation *BarLine    `xml:"Articulation,omitempty"`
-// }
-//
-// type TentacledNote struct {
-// 	Pitch string `xml:"pitch"`
-// 	Tpc   string `xml:"tpc"`
-// }
-//
-// type Dynamic struct {
-// 	Subtype  string  `xml:"subtype"`
-// 	Velocity string  `xml:"velocity"`
-// 	Offset   *Offset `xml:"offset,omitempty"`
-// }
-//
-// type Offset struct {
-// 	X string `xml:"x,attr"`
-// 	Y string `xml:"y,attr"`
-// }
-
 type KeySig struct {
 	Accidental string `xml:"accidental"`
 }
-
-// type RESTElement struct {
-// 	DurationType BaseNote  `xml:"durationType"`
-// 	BeamMode     *BeamMode `xml:"BeamMode,omitempty"`
-// }
-//
-// type PurpleSpanner struct {
-// 	HairPin *BarLine    `xml:"HairPin,omitempty"`
-// 	Next    *FluffyNext `xml:"next,omitempty"`
-// 	Type    FluffyType  `xml:"type,attr"`
-// 	Prev    *FluffyNext `xml:"prev,omitempty"`
-// 	Volta   *VoltaClass `xml:"Volta,omitempty"`
-// 	Ottava  *BarLine    `xml:"Ottava,omitempty"`
-// }
-//
-// type FluffyNext struct {
-// 	Location FluffyLocation `xml:"location"`
-// }
-//
-// type FluffyLocation struct {
-// 	Fractions *string `xml:"fractions,omitempty"`
-// 	Measures  *string `xml:"measures,omitempty"`
-// }
-//
-// type VoltaClass struct {
-// 	EndHookType string `xml:"endHookType"`
-// 	BeginText   string `xml:"beginText"`
-// 	Endings     string `xml:"endings"`
-// }
-//
-// type StaffText struct {
-// 	Text string `xml:"text"`
-// }
-//
-// type Tempo struct {
-// 	Tempo      string    `xml:"tempo"`
-// 	FollowText string    `xml:"followText"`
-// 	Text       TextClass `xml:"text"`
-// }
-//
-// type TextClass struct {
-// 	B    []BElement `xml:"b"`
-// 	Font Font       `xml:"font"`
-// 	Text string     `xml:",chardata"`
-// }
-//
-// type BClass struct {
-// 	Font Font   `xml:"font"`
-// 	Text string `xml:",chardata"`
-// }
-//
-// type Font struct {
-// 	Face string `xml:"face,attr"`
-// }
 
 type TimeSig struct {
 	SigN string `xml:"sigN"`
 	SigD string `xml:"sigD"`
 }
-
-// type TupletClass struct {
-// 	Offset      *Offset     `xml:"offset,omitempty"`
-// 	NormalNotes string      `xml:"normalNotes"`
-// 	ActualNotes string      `xml:"actualNotes"`
-// 	BaseNote    BaseNote    `xml:"baseNote"`
-// 	Number      TextElement `xml:"Number"`
-// }
 
 type TextElement struct {
 	Style StyleEnum `xml:"style"`
@@ -351,54 +318,6 @@ type VBox struct {
 	Text   []TextElement `xml:"Text"`
 }
 
-// type BaseNote string
-//
-// const (
-// 	Eighth  BaseNote = "eighth"
-// 	Quarter BaseNote = "quarter"
-// 	Half    BaseNote = "half"
-// 	The16Th BaseNote = "16th"
-// )
-//
-// type Subtype string
-//
-// const (
-// 	AccidentalFlat    Subtype = "accidentalFlat"
-// 	AccidentalNatural Subtype = "accidentalNatural"
-// 	AccidentalSharp   Subtype = "accidentalSharp"
-// )
-//
-// type Fractions string
-//
-// const (
-// 	Fractions112 Fractions = "-1/12"
-// 	Fractions38  Fractions = "-3/8"
-// 	The112       Fractions = "1/12"
-// 	The38        Fractions = "3/8"
-// )
-//
-// type PurpleType string
-//
-// const (
-// 	Slur PurpleType = "Slur"
-// 	Tie  PurpleType = "Tie"
-// )
-//
-// type BeamMode string
-//
-// const (
-// 	Begin32 BeamMode = "begin32"
-// 	Mid     BeamMode = "mid"
-// )
-//
-// type FluffyType string
-//
-// const (
-// 	HairPin FluffyType = "HairPin"
-// 	Ottava  FluffyType = "Ottava"
-// 	Volta   FluffyType = "Volta"
-// )
-
 type StyleEnum string
 
 const (
@@ -409,6 +328,7 @@ const (
 )
 
 type Chord struct {
+	Dots         int        `xml:"dots,omitempty"`
 	DurationType string     `xml:"durationType"`
 	Lyrics       []*Lyrics  `xml:"Lyrics"`
 	Spanner      []*Spanner `xml:"Spanner"`
@@ -445,38 +365,3 @@ type Note struct {
 	Pitch int `xml:"pitch"`
 	TPC   int `xml:"tpc"`
 }
-
-// type ArticulationUnion struct {
-// 	BarLine      *BarLine
-// 	BarLineArray []BarLine
-// }
-//
-// type StickyNote struct {
-// 	FluffyNote      *FluffyNote
-// 	PurpleNoteArray []PurpleNote
-// }
-//
-// type ChordSpanner struct {
-// 	NoteSpanner      *NoteSpanner
-// 	NoteSpannerArray []NoteSpanner
-// }
-//
-// type IndigoNote struct {
-// 	FluffyNoteArray []FluffyNote
-// 	TentacledNote   *TentacledNote
-// }
-//
-// type RESTUnion struct {
-// 	RESTElement      *RESTElement
-// 	RESTElementArray []RESTElement
-// }
-//
-// type VoiceSpanner struct {
-// 	PurpleSpanner      *PurpleSpanner
-// 	PurpleSpannerArray []PurpleSpanner
-// }
-//
-// type BElement struct {
-// 	BClass *BClass
-// 	String *string
-// }
