@@ -63,7 +63,7 @@ var test01Data = &ScoreZip{
 					{
 						StaffType: StaffType{Name: "stdNormal", Group: "pitched"},
 						StaffElements: []any{
-							DefaultClef("F"),
+							&DefaultClef{Value: "F"},
 						},
 						ID: "2",
 					},

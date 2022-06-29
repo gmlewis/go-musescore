@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"encoding/xml"
 	"fmt"
-	"log"
-	"reflect"
 )
 
 // ScoreZip represents a MuseScore 3 score in `mscz` (zip'd) format.
@@ -42,6 +40,16 @@ var (
 		"</Zerberus>",
 	}
 )
+
+type UnhandledError struct {
+	Type   string
+	Name   string
+	Offset int64
+}
+
+func (u *UnhandledError) Error() string {
+	return fmt.Sprintf("unhandled %v: %v at byte offset %v", u.Type, u.Name, u.Offset)
+}
 
 // XML renders the embedded MuseScore to XML format.
 func (s *ScoreZip) XML() ([]byte, error) {
@@ -164,7 +172,8 @@ func (p *PartStaff) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) e
 		case "id":
 			p.ID = attr.Value
 		default:
-			return fmt.Errorf("PartStaff.UnmarshalXML: unhandled attr: %v", attr.Name.Local)
+			err := &UnhandledError{Type: "attr", Name: attr.Name.Local, Offset: decoder.InputOffset()}
+			return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
 		}
 	}
 
@@ -190,15 +199,7 @@ func (p *PartStaff) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) e
 				if err = decoder.DecodeElement(el, &tok); err != nil {
 					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
 				}
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(*p)=%#v", reflect.TypeOf(*p))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(*p)=%#v", reflect.ValueOf(*p))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(el)=%#v", reflect.TypeOf(el))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(el)=%#v", reflect.ValueOf(el))
 				p.StaffElements = append(p.StaffElements, el)
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(p.StaffElements)=%#v", reflect.TypeOf(p.StaffElements))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(p.StaffElements)=%#v", reflect.ValueOf(p.StaffElements))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.TypeOf(p.StaffElements[-1])=%#v", reflect.TypeOf(p.StaffElements[len(p.StaffElements)-1]))
-				log.Printf("PartStaff.UnmarshalXML: Bracket: reflect.ValueOf(p.StaffElements[-1])=%#v", reflect.ValueOf(p.StaffElements[len(p.StaffElements)-1]))
 			case "barLineSpan":
 				el := BarLineSpan(0)
 				if err = decoder.DecodeElement(&el, &tok); err != nil {
@@ -206,13 +207,38 @@ func (p *PartStaff) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) e
 				}
 				p.StaffElements = append(p.StaffElements, el)
 			case "defaultClef":
-				el := DefaultClef("")
+				el := &DefaultClef{}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			case "defaultConcertClef":
+				el := &DefaultClef{Type: "Concert"}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			case "defaultTransposingClef":
+				el := &DefaultClef{Type: "Transposing"}
+				if err = decoder.DecodeElement(el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			case "small":
+				el := StaffSmall(0)
+				if err = decoder.DecodeElement(&el, &tok); err != nil {
+					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
+				}
+				p.StaffElements = append(p.StaffElements, el)
+			case "distOffset":
+				el := DistOffset(0)
 				if err = decoder.DecodeElement(&el, &tok); err != nil {
 					return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
 				}
 				p.StaffElements = append(p.StaffElements, el)
 			default:
-				return fmt.Errorf("PartStaff.UnmarshalXML: unhandled token: %v", tok.Name.Local)
+				err := &UnhandledError{Type: "token", Name: tok.Name.Local, Offset: decoder.InputOffset()}
+				return fmt.Errorf("PartStaff.UnmarshalXML: %w", err)
 			}
 
 		case xml.EndElement:
@@ -242,21 +268,67 @@ func (b BarLineSpan) MarshalXML(encoder *xml.Encoder, start xml.StartElement) er
 	return nil
 }
 
-type DefaultClef string
+type DistOffset float64
 
-func (d DefaultClef) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+func (d DistOffset) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
 	se := xml.StartElement{
-		Name: xml.Name{Local: "defaultClef"},
+		Name: xml.Name{Local: "distOffset"},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("DistOffset.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.CharData(fmt.Sprintf("%v", d))); err != nil {
+		return fmt.Errorf("DistOffset.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "distOffset"}}); err != nil {
+		return fmt.Errorf("DistOffset.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+type StaffSmall int
+
+func (s StaffSmall) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	se := xml.StartElement{
+		Name: xml.Name{Local: "small"},
+	}
+	if err := encoder.EncodeToken(se); err != nil {
+		return fmt.Errorf("StaffSmall.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.CharData(fmt.Sprintf("%v", s))); err != nil {
+		return fmt.Errorf("StaffSmall.MarshalXML: %w", err)
+	}
+
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "small"}}); err != nil {
+		return fmt.Errorf("StaffSmall.MarshalXML: %w", err)
+	}
+
+	return nil
+}
+
+type DefaultClef struct {
+	Type  string // One of: "", "Concert", "Transposing"
+	Value string `xml:",chardata"`
+}
+
+func (d *DefaultClef) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error {
+	local := fmt.Sprintf("default%vClef", d.Type)
+	se := xml.StartElement{
+		Name: xml.Name{Local: local},
 	}
 	if err := encoder.EncodeToken(se); err != nil {
 		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
 	}
 
-	if err := encoder.EncodeToken(xml.CharData(d)); err != nil {
+	if err := encoder.EncodeToken(xml.CharData(d.Value)); err != nil {
 		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
 	}
 
-	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: "defaultClef"}}); err != nil {
+	if err := encoder.EncodeToken(xml.EndElement{Name: xml.Name{Local: local}}); err != nil {
 		return fmt.Errorf("DefaultClef.MarshalXML: %w", err)
 	}
 
@@ -282,12 +354,15 @@ func (b *Bracket) MarshalXML(encoder *xml.Encoder, start xml.StartElement) error
 				Name:  xml.Name{Local: "span"},
 				Value: fmt.Sprintf("%v", b.Span),
 			},
-			{
-				Name:  xml.Name{Local: "col"},
-				Value: b.Col,
-			},
 		},
 	}
+	if b.Col != "" {
+		se.Attr = append(se.Attr, xml.Attr{
+			Name:  xml.Name{Local: "col"},
+			Value: b.Col,
+		})
+	}
+
 	if err := encoder.EncodeToken(se); err != nil {
 		return fmt.Errorf("Bracket.MarshalXML: %w", err)
 	}
@@ -412,7 +487,8 @@ func (v *Voice) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 	for _, attr := range start.Attr {
 		switch attr.Name.Local {
 		default:
-			return fmt.Errorf("Voice.UnmarshalXML: unhandled attr: %v", attr.Name.Local)
+			err := &UnhandledError{Type: "attr", Name: attr.Name.Local, Offset: decoder.InputOffset()}
+			return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 		}
 	}
 
@@ -452,7 +528,8 @@ func (v *Voice) UnmarshalXML(decoder *xml.Decoder, start xml.StartElement) error
 				}
 				v.TimedElements = append(v.TimedElements, el)
 			default:
-				return fmt.Errorf("Voice.UnmarshalXML: unhandled token: %v", tok.Name.Local)
+				err := &UnhandledError{Type: "token", Name: tok.Name.Local, Offset: decoder.InputOffset()}
+				return fmt.Errorf("Voice.UnmarshalXML: %w", err)
 			}
 
 		case xml.EndElement:

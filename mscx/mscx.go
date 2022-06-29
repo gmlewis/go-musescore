@@ -23,6 +23,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	_ "image/png"
 	"io"
@@ -93,6 +94,12 @@ func parseZip(buf []byte, callback CallbackFn) (*ScoreZip, error) {
 		if strings.HasSuffix(fh.Name, ".mscx") {
 			result, err = parseXML(nb)
 			if err != nil {
+				var unhandledError *UnhandledError
+				if errors.As(err, &unhandledError) {
+					endOffset := bytes.Index(nb[unhandledError.Offset:], []byte(fmt.Sprintf("</%v>", unhandledError.Name)))
+					eoc := int(unhandledError.Offset) + endOffset + len(unhandledError.Name) + 4
+					return nil, fmt.Errorf("zip.parseXML(%q): context:\n%s\n%w", fh.Name, nb[:eoc], err)
+				}
 				return nil, fmt.Errorf("zip.parseXML(%q): %w", fh.Name, err)
 			}
 		}
